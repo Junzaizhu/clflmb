@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>客户策略分类表（直接编辑模式）</title>
+  <!-- 引入外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#1e40af',
+            secondary: '#3b82f6',
+            accent: '#60a5fa',
+            neutral: '#f1f5f9',
+            'neutral-dark': '#334155',
+            danger: '#dc2626',
+            success: '#16a34a',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .table-shadow {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      }
+      .cell-hover {
+        @apply transition-all duration-200 hover:bg-blue-50;
+      }
+      .editable-cell {
+        @apply focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200;
+      }
+      .header-action-btn {
+        @apply opacity-0 hover:opacity-100 transition-opacity duration-200 ml-1;
+      }
+      .header-cell:hover .header-action-btn {
+        opacity: 1;
+      }
+      .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+      }
+      .table-cell {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding: 0.5rem;
+      }
+      .strategy-input {
+        width: 100%;
+        min-height: 2.5rem;
+        box-sizing: border-box;
+      }
+      .notification {
+        @apply fixed bottom-5 right-5 px-4 py-2 rounded-md shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center text-sm;
+      }
+      .notification.show {
+        @apply transform translate-y-0 opacity-100;
+      }
+      .add-column-btn {
+        @apply bg-white border-2 border-dashed border-gray-300 hover:border-blue-400 text-gray-500 hover:text-blue-600 transition-all duration-200 flex items-center justify-center;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800 m-0">
+  <div class="container px-4 py-6 w-full max-w-none">
+    <!-- 页面标题和操作按钮 -->
+    <header class="mb-4 flex flex-wrap justify-between items-center">
+      <h1 class="text-[clamp(1.2rem,2vw,1.8rem)] font-bold text-primary mb-1 flex items-center">
+        <i class="fa fa-sitemap mr-2 text-secondary"></i>客户策略分类表
+      </h1>
+      <div class="flex gap-3">
+        <button id="toggleEditModeBtn" class="px-4 py-1.5 bg-secondary text-white rounded-md shadow hover:bg-primary transition-all duration-200 flex items-center text-sm">
+          <i class="fa fa-edit mr-1.5"></i>开启编辑模式
+        </button>
+        <button id="saveChangesBtn" class="px-4 py-1.5 bg-success text-white rounded-md shadow hover:bg-success/90 transition-all duration-200 flex items-center text-sm hidden">
+          <i class="fa fa-save mr-1.5"></i>保存所有修改
+        </button>
+      </div>
+    </header>
+    
+    <p class="text-gray-600 text-sm mb-4">在编辑模式下可直接修改表格内容、列标题和管理列</p>
+    
+    <!-- 表格容器 -->
+    <div class="overflow-x-auto bg-white rounded-lg shadow-md table-shadow transition-all duration-300 hover:shadow-lg">
+      <table class="fixed-table divide-y divide-gray-200 text-sm border-collapse" id="strategyTable">
+        <thead class="bg-neutral">
+          <!-- 第一行表头（板块） -->
+          <tr id="sectionHeaderRow">
+            <!-- 由JavaScript动态生成 -->
+          </tr>
+          <!-- 第二行表头（信息项） -->
+          <tr id="itemHeaderRow">
+            <!-- 由JavaScript动态生成 -->
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200" id="strategyTableBody">
+          <!-- 表格内容通过JavaScript动态生成 -->
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- 信息提示 -->
+    <div id="notification" class="notification">操作成功</div>
+  </div>
+
+  <script>
+    // 定义初始板块结构
+    const initialSectionStructure = [
+      { 
+        name: "策略分类", 
+        items: ["策略分类"],
+        width: 140,
+        dataField: "category"
+      },
+      { 
+        name: "细分类别", 
+        items: ["细分类别"],
+        width: 140,
+        dataField: "subcategory"
+      },
+      { 
+        name: "市场策略", 
+        items: ["洞察支撑", "市场活动"],
+        width: 240,
+        itemWidth: 120,
+        dataField: "market"
+      },
+      { 
+        name: "商务策略", 
+        items: ["合同账期"],
+        width: 120,
+        dataField: "business"
+      },
+      { 
+        name: "交付策略", 
+        items: ["资源优先级"],
+        width: 120,
+        dataField: "delivery"
+      },
+      { 
+        name: "客户深度经营策略", 
+        items: ["客户铁三角", "ABP", "客户关系提升计划"],
+        width: 300,
+        itemWidth: 100,
+        dataField: "deep"
+      }
+    ];
+    
+    // 初始客户策略数据
+    const initialStrategyData = [
+      {
+        category: "战略客户（S）",
+        subcategories: [
+          {
+            name: "新战略客户",
+            market: { "洞察支撑": "新客户洞察模板", "市场活动": "相关市场活动必须邀请" },
+            business: "0-90天",
+            delivery: "资源优先，但优先级低于战略项目",
+            deep: { "客户铁三角": "资源优先，但优先级低于战略项目", "ABP": "X", "客户关系提升计划": "√" }
+          },
+          {
+            name: "目标战略客户",
+            market: { "洞察支撑": "去除战略信息的洞察模板", "市场活动": "相关市场活动必须邀请" },
+            business: "0-90天",
+            delivery: "资源优先，但优先级低于战略项目",
+            deep: { "客户铁三角": "资源优先，但优先级低于战略项目", "ABP": "√", "客户关系提升计划": "√" }
+          },
+          {
+            name: "已成为战略供应商的战略客户",
+            market: { "洞察支撑": "全量洞察模板", "市场活动": "相关市场活动必须邀请" },
+            business: "0-90天",
+            delivery: "资源优先，但优先级低于战略项目",
+            deep: { "客户铁三角": "资源优先，但优先级低于战略项目", "ABP": "√", "客户关系提升计划": "√" }
+          }
+        ]
+      },
+      {
+        category: "重要客户（A）",
+        subcategories: [
+          {
+            name: "",
+            market: { "洞察支撑": "X", "市场活动": "邀请" },
+            business: "0-60天",
+            delivery: "X",
+            deep: { "客户铁三角": "X", "ABP": "X", "客户关系提升计划": "√" }
+          }
+        ]
+      },
+      {
+        category: "价值客户（B）",
+        subcategories: [
+          {
+            name: "",
+            market: { "洞察支撑": "X", "市场活动": "可邀请" },
+            business: "0-30天",
+            delivery: "X",
+            deep: { "客户铁三角": "X", "ABP": "X", "客户关系提升计划": "按实际情况选做" }
+          }
+        ]
+      },
+      {
+        category: "待发展客户（C）",
+        subcategories: [
+          {
+            name: "",
+            market: { "洞察支撑": "X", "市场活动": "X" },
+            business: "提高预付款比例，优先款到发货",
+            delivery: "X",
+            deep: { "客户铁三角": "X", "ABP": "X", "客户关系提升计划": "X" }
+          }
+        ]
+      }
+    ];
+    
+    // 全局状态
+    let editMode = false;
+    let sectionStructure = loadSectionStructure() || initialSectionStructure;
+    let strategyData = loadStrategyData() || initialStrategyData;
+    
+    // 从本地存储加载数据
+    function loadSectionStructure() {
+      const savedData = localStorage.getItem('strategySectionStructure');
+      return savedData ? JSON.parse(savedData) : null;
+    }
+    
+    function loadStrategyData() {
+      const savedData = localStorage.getItem('strategyContentData');
+      return savedData ? JSON.parse(savedData) : null;
+    }
+    
+    // 保存数据到本地存储
+    function saveToLocalStorage() {
+      try {
+        localStorage.setItem('strategySectionStructure', JSON.stringify(sectionStructure));
+        localStorage.setItem('strategyContentData', JSON.stringify(strategyData));
+        return true;
+      } catch (e) {
+        console.error('保存数据失败', e);
+        return false;
+      }
+    }
+    
+    // 显示通知
+    function showNotification(message, isSuccess = true) {
+      const notification = document.getElementById('notification');
+      notification.textContent = message;
+      notification.className = `notification ${isSuccess ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`;
+      
+      // 显示通知
+      setTimeout(() => notification.classList.add('show'), 10);
+      
+      // 3秒后隐藏
+      setTimeout(() => {
+        notification.classList.remove('show');
+      }, 3000);
+    }
+    
+    // 渲染表头（板块和信息项）
+    function renderHeaders() {
+      const sectionRow = document.getElementById('sectionHeaderRow');
+      const itemRow = document.getElementById('itemHeaderRow');
+      
+      sectionRow.innerHTML = '';
+      itemRow.innerHTML = '';
+      
+      sectionStructure.forEach((section, sectionIndex) => {
+        // 渲染板块表头
+        const sectionCell = document.createElement('th');
+        sectionCell.className = `px-3 py-2 text-left text-xs bg-primary text-white font-semibold uppercase tracking-wider table-cell header-cell`;
+        sectionCell.style.width = `${section.width}px`;
+        sectionCell.colSpan = section.items.length;
+        
+        // 板块标题HTML - 直接可编辑
+        sectionCell.innerHTML = `
+          <div class="flex items-center">
+            ${editMode ? `
+              <input type="text" value="${section.name}" 
+                     class="bg-transparent text-white border-b border-white/30 focus:border-white pb-0.5 editable-cell w-36"
+                     onchange="updateSectionName(${sectionIndex}, this.value)">
+            ` : `
+              <span>${section.name}</span>
+            `}
+            
+            ${editMode && sectionIndex > 1 ? `
+              <div class="ml-2 flex">
+                <button class="action-btn header-action-btn text-blue-200" onclick="addItemToSection(${sectionIndex})">
+                  <i class="fa fa-plus-circle"></i>
+                </button>
+                <button class="action-btn header-action-btn text-red-200" onclick="deleteSection(${sectionIndex})">
+                  <i class="fa fa-trash"></i>
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+        sectionRow.appendChild(sectionCell);
+        
+        // 渲染信息项表头
+        section.items.forEach((item, itemIndex) => {
+          const itemCell = document.createElement('th');
+          itemCell.className = `px-3 py-2 text-left text-xs font-semibold text-neutral-dark uppercase tracking-wider table-cell header-cell`;
+          itemCell.style.width = `${section.itemWidth || section.width / section.items.length}px`;
+          
+          // 信息项标题HTML - 直接可编辑
+          itemCell.innerHTML = `
+            <div class="flex items-center">
+              ${editMode ? `
+                <input type="text" value="${item}" 
+                       class="bg-transparent border-b border-gray-300 focus:border-blue-500 pb-0.5 editable-cell w-28"
+                       onchange="updateItemName(${sectionIndex}, ${itemIndex}, this.value)">
+              ` : `
+                <span>${item}</span>
+              `}
+              
+              ${editMode && sectionIndex > 1 && section.items.length > 1 ? `
+                <button class="action-btn header-action-btn text-red-500" 
+                        onclick="deleteItemFromSection(${sectionIndex}, ${itemIndex})">
+                  <i class="fa fa-times"></i>
+                </button>
+              ` : ''}
+            </div>
+          `;
+          itemRow.appendChild(itemCell);
+        });
+      });
+      
+      // 添加"新增列"按钮（仅在编辑模式下显示）
+      if (editMode) {
+        const addSectionCell = document.createElement('th');
+        addSectionCell.className = `px-3 py-2 table-cell add-column-btn`;
+        addSectionCell.style.width = '100px';
+        addSectionCell.colSpan = 1;
+        addSectionCell.innerHTML = `
+          <button onclick="addNewSection()">
+            <i class="fa fa-plus mr-1"></i> 新增列
+          </button>
+        `;
+        sectionRow.appendChild(addSectionCell);
+      }
+    }
+    
+    // 渲染表格内容
+    function renderTableBody() {
+      const tableBody = document.getElementById('strategyTableBody');
+      tableBody.innerHTML = '';
+      
+      strategyData.forEach((strategyGroup) => {
+        const category = strategyGroup.category;
+        const subcategories = strategyGroup.subcategories;
+        
+        subcategories.forEach((sub, subIndex) => {
+          // 只在第一个子类别显示策略分类
+          const showCategory = subIndex === 0;
+          
+          const row = document.createElement('tr');
+          row.className = 'cell-hover';
+          
+          let cellHtml = '';
+          
+          // 为每个板块生成单元格
+          sectionStructure.forEach((section) => {
+            switch (section.dataField) {
+              case "category":
+                // 策略分类板块
+                cellHtml += `
+                  <td class="border bg-neutral font-semibold table-cell">
+                    ${showCategory ? category : ''}
+                  </td>
+                `;
+                break;
+                
+              case "subcategory":
+                // 细分类别板块
+                cellHtml += `
+                  <td class="border table-cell">
+                    ${editMode ? 
+                      `<textarea class="strategy-input px-2 py-1 border rounded text-sm editable-cell" 
+                        data-category="${category}" data-sub="${subIndex}" data-field="name">${sub.name}</textarea>` : 
+                      sub.name
+                    }
+                  </td>
+                `;
+                break;
+                
+              default:
+                // 其他板块，根据信息项生成单元格
+                section.items.forEach((item) => {
+                  // 获取字段值
+                  let fieldValue = '';
+                  if (typeof sub[section.dataField] === 'object') {
+                    fieldValue = sub[section.dataField][item] || '';
+                  } else {
+                    fieldValue = sub[section.dataField] || '';
+                  }
+                  
+                  cellHtml += `
+                    <td class="border table-cell">
+                      ${editMode ? 
+                        `<textarea class="strategy-input px-2 py-1 border rounded text-sm editable-cell" 
+                          data-category="${category}" data-sub="${subIndex}" data-field="${section.dataField}.${item}">${fieldValue}</textarea>` : 
+                        fieldValue
+                      }
+                    </td>
+                  `;
+                });
+            }
+          });
+          
+          row.innerHTML = cellHtml;
+          tableBody.appendChild(row);
+        });
+      });
+      
+      // 编辑模式事件监听
+      if (editMode) {
+        document.querySelectorAll('.strategy-input').forEach(input => {
+          input.addEventListener('change', updateStrategyData);
+          // 自动调整文本框高度以适应内容
+          input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+          });
+          // 初始化高度
+          input.style.height = (input.scrollHeight) + 'px';
+        });
+      }
+    }
+    
+    // 渲染整个表格
+    function renderStrategyTable() {
+      renderHeaders();
+      renderTableBody();
+    }
+    
+    // 更新策略数据
+    function updateStrategyData() {
+      const category = this.getAttribute('data-category');
+      const subIndex = parseInt(this.getAttribute('data-sub'));
+      const field = this.getAttribute('data-field');
+      const value = this.value;
+      
+      // 查找对应的策略组和子类别
+      const targetGroup = strategyData.find(group => group.category === category);
+      if (!targetGroup) return;
+      
+      const targetSub = targetGroup.subcategories[subIndex];
+      if (!targetSub) return;
+      
+      // 解析字段路径并更新数据
+      const fieldParts = field.split('.');
+      let target = targetSub;
+      
+      for (let i = 0; i < fieldParts.length; i++) {
+        if (i === fieldParts.length - 1) {
+          target[fieldParts[i]] = value;
+        } else {
+          // 如果对象不存在则创建
+          if (!target[fieldParts[i]]) {
+            target[fieldParts[i]] = {};
+          }
+          target = target[fieldParts[i]];
+        }
+      }
+    }
+    
+    // 切换编辑模式
+    function toggleEditMode() {
+      editMode = !editMode;
+      
+      const toggleBtn = document.getElementById('toggleEditModeBtn');
+      const saveBtn = document.getElementById('saveChangesBtn');
+      
+      if (editMode) {
+        // 进入编辑模式
+        toggleBtn.innerHTML = '<i class="fa fa-times mr-1.5"></i>关闭编辑模式';
+        toggleBtn.classList.remove('bg-secondary', 'hover:bg-primary');
+        toggleBtn.classList.add('bg-danger', 'hover:bg-danger/90');
+        saveBtn.classList.remove('hidden');
+        showNotification('已进入编辑模式，可以直接修改内容和列');
+      } else {
+        // 退出编辑模式
+        toggleBtn.innerHTML = '<i class="fa fa-edit mr-1.5"></i>开启编辑模式';
+        toggleBtn.classList.remove('bg-danger', 'hover:bg-danger/90');
+        toggleBtn.classList.add('bg-secondary', 'hover:bg-primary');
+        saveBtn.classList.add('hidden');
+        showNotification('已退出编辑模式');
+      }
+      
+      renderStrategyTable();
+    }
+    
+    // 更新板块名称
+    function updateSectionName(sectionIndex, newName) {
+      if (newName.trim()) {
+        sectionStructure[sectionIndex].name = newName.trim();
+        // 如果是新板块，同步更新数据字段名
+        if (!sectionStructure[sectionIndex].dataField) {
+          sectionStructure[sectionIndex].dataField = newName.trim().toLowerCase().replace(/\s+/g, '_');
+        }
+        showNotification(`已更新板块名称: ${newName.trim()}`);
+      } else {
+        showNotification('板块名称不能为空', false);
+        renderStrategyTable(); // 恢复原始值
+      }
+    }
+    
+    // 更新信息项名称
+    function updateItemName(sectionIndex, itemIndex, newName) {
+      if (newName.trim()) {
+        const section = sectionStructure[sectionIndex];
+        const oldName = section.items[itemIndex];
+        section.items[itemIndex] = newName.trim();
+        
+        // 更新数据中的对应字段名
+        const dataField = section.dataField;
+        strategyData.forEach(group => {
+          group.subcategories.forEach(sub => {
+            if (sub[dataField] && sub[dataField][oldName] !== undefined) {
+              sub[dataField][newName.trim()] = sub[dataField][oldName];
+              delete sub[dataField][oldName];
+            }
+          });
+        });
+        
+        showNotification(`已更新信息项名称: ${newName.trim()}`);
+      } else {
+        showNotification('信息项名称不能为空', false);
+        renderStrategyTable(); // 恢复原始值
+      }
+    }
+    
+    // 向板块添加信息项
+    function addItemToSection(sectionIndex) {
+      const section = sectionStructure[sectionIndex];
+      const newItemName = `新信息项${section.items.length + 1}`;
+      section.items.push(newItemName);
+      
+      // 调整板块宽度
+      section.width = (section.items.length * 120);
+      
+      // 为所有数据添加新信息项字段
+      const dataField = section.dataField;
+      strategyData.forEach(group => {
+        group.subcategories.forEach(sub => {
+          if (!sub[dataField]) sub[dataField] = {};
+          sub[dataField][newItemName] = '';
+        });
+      });
+      
+      renderStrategyTable();
+      showNotification(`已向"${section.name}"添加新信息项`);
+    }
+    
+    // 从板块删除信息项
+    function deleteItemFromSection(sectionIndex, itemIndex) {
+      const section = sectionStructure[sectionIndex];
+      const deletedItem = section.items.splice(itemIndex, 1)[0];
+      
+      // 调整板块宽度
+      section.width = (section.items.length * 120);
+      
+      // 从所有数据中移除对应字段
+      const dataField = section.dataField;
+      strategyData.forEach(group => {
+        group.subcategories.forEach(sub => {
+          if (sub[dataField]) {
+            delete sub[dataField][deletedItem];
+          }
+        });
+      });
+      
+      renderStrategyTable();
+      showNotification(`已从"${section.name}"删除信息项`);
+    }
+    
+    // 添加新板块
+    function addNewSection() {
+      const newSectionName = `新板块${sectionStructure.length + 1}`;
+      const newItems = ["新信息项1"];
+      
+      // 生成唯一的数据字段名
+      const dataField = newSectionName.toLowerCase().replace(/\s+/g, '_');
+      
+      sectionStructure.push({
+        name: newSectionName,
+        items: newItems,
+        width: 120 * newItems.length,
+        itemWidth: 120,
+        dataField: dataField
+      });
+      
+      // 为现有数据添加新字段
+      strategyData.forEach(group => {
+        group.subcategories.forEach(sub => {
+          sub[dataField] = {};
+          newItems.forEach(item => {
+            sub[dataField][item] = '';
+          });
+        });
+      });
+      
+      renderStrategyTable();
+      showNotification(`已添加新板块: ${newSectionName}`);
+    }
+    
+    // 删除板块
+    function deleteSection(sectionIndex) {
+      // 保留至少两个基础板块
+      if (sectionStructure.length <= 2) {
+        showNotification('至少需要保留两个板块', false);
+        return;
+      }
+      
+      const section = sectionStructure[sectionIndex];
+      if (confirm(`确定要删除"${section.name}"板块吗？相关数据也将被删除。`)) {
+        const dataField = section.dataField;
+        
+        // 从数据中移除对应字段
+        strategyData.forEach(group => {
+          group.subcategories.forEach(sub => {
+            delete sub[dataField];
+          });
+        });
+        
+        // 从板块结构中移除
+        sectionStructure.splice(sectionIndex, 1);
+        
+        renderStrategyTable();
+        showNotification(`已删除板块: ${section.name}`);
+      }
+    }
+    
+    // 保存所有修改
+    function saveAllChanges() {
+      if (saveToLocalStorage()) {
+        showNotification('所有修改已成功保存');
+      } else {
+        showNotification('保存失败，请重试', false);
+      }
+    }
+    
+    // 绑定全局函数，使HTML中可以直接调用
+    window.updateSectionName = updateSectionName;
+    window.updateItemName = updateItemName;
+    window.addItemToSection = addItemToSection;
+    window.deleteItemFromSection = deleteItemFromSection;
+    window.addNewSection = addNewSection;
+    window.deleteSection = deleteSection;
+    
+    // 页面加载时初始化
+    window.addEventListener('load', () => {
+      // 渲染表格
+      renderStrategyTable();
+      
+      // 添加按钮事件监听
+      document.getElementById('toggleEditModeBtn').addEventListener('click', toggleEditMode);
+      document.getElementById('saveChangesBtn').addEventListener('click', saveAllChanges);
+      
+      // 添加表格加载动画
+      const table = document.querySelector('table');
+      table.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+      setTimeout(() => {
+        table.classList.remove('opacity-0');
+      }, 100);
+    });
+  </script>
+</body>
+</html>
