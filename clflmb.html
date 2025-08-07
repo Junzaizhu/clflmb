@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>客户策略分类表（直接编辑模式）</title>
+  <title>客户策略分类表</title>
   <!-- 引入外部资源 -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
@@ -18,7 +18,6 @@
             secondary: '#3b82f6',
             accent: '#60a5fa',
             neutral: '#f1f5f9',
-            'neutral-dark': '#334155',
             danger: '#dc2626',
             success: '#16a34a',
           },
@@ -84,16 +83,19 @@
         <i class="fa fa-sitemap mr-2 text-secondary"></i>客户策略分类表
       </h1>
       <div class="flex gap-3">
-        <button id="toggleEditModeBtn" class="px-4 py-1.5 bg-secondary text-white rounded-md shadow hover:bg-primary transition-all duration-200 flex items-center text-sm">
-          <i class="fa fa-edit mr-1.5"></i>开启编辑模式
+        <button id="editBtn" class="px-4 py-1.5 bg-secondary text-white rounded-md shadow hover:bg-primary transition-all duration-200 flex items-center text-sm">
+          <i class="fa fa-edit mr-1.5"></i>编辑
         </button>
-        <button id="saveChangesBtn" class="px-4 py-1.5 bg-success text-white rounded-md shadow hover:bg-success/90 transition-all duration-200 flex items-center text-sm hidden">
-          <i class="fa fa-save mr-1.5"></i>保存所有修改
+        <button id="saveBtn" class="px-4 py-1.5 bg-success text-white rounded-md shadow hover:bg-success/90 transition-all duration-200 flex items-center text-sm hidden">
+          <i class="fa fa-save mr-1.5"></i>保存
+        </button>
+        <button id="cancelBtn" class="px-4 py-1.5 bg-gray-300 text-gray-700 rounded-md shadow hover:bg-gray-400 transition-all duration-200 flex items-center text-sm hidden">
+          <i class="fa fa-times mr-1.5"></i>取消
         </button>
       </div>
     </header>
     
-    <p class="text-gray-600 text-sm mb-4">在编辑模式下可直接修改表格内容、列标题和管理列</p>
+    <p class="text-gray-600 text-sm mb-4">点击"编辑"按钮可修改表格内容和列设置，完成后可保存或取消</p>
     
     <!-- 表格容器 -->
     <div class="overflow-x-auto bg-white rounded-lg shadow-md table-shadow transition-all duration-300 hover:shadow-lg">
@@ -229,18 +231,39 @@
     
     // 全局状态
     let editMode = false;
-    let sectionStructure = loadSectionStructure() || initialSectionStructure;
-    let strategyData = loadStrategyData() || initialStrategyData;
+    let sectionStructure = [];
+    let strategyData = [];
+    let savedSectionStructure = [];
+    let savedStrategyData = [];
     
-    // 从本地存储加载数据
-    function loadSectionStructure() {
-      const savedData = localStorage.getItem('strategySectionStructure');
-      return savedData ? JSON.parse(savedData) : null;
+    // 初始化数据
+    function initializeData() {
+      // 从本地存储加载数据，如果没有则使用初始数据
+      const savedSections = localStorage.getItem('strategySectionStructure');
+      const savedData = localStorage.getItem('strategyContentData');
+      
+      if (savedSections && savedData) {
+        try {
+          sectionStructure = JSON.parse(savedSections);
+          strategyData = JSON.parse(savedData);
+        } catch (e) {
+          console.error('加载保存的数据失败', e);
+          sectionStructure = [...initialSectionStructure];
+          strategyData = JSON.parse(JSON.stringify(initialStrategyData));
+        }
+      } else {
+        sectionStructure = [...initialSectionStructure];
+        strategyData = JSON.parse(JSON.stringify(initialStrategyData));
+      }
+      
+      // 保存初始状态用于取消操作
+      saveCurrentStateAsSaved();
     }
     
-    function loadStrategyData() {
-      const savedData = localStorage.getItem('strategyContentData');
-      return savedData ? JSON.parse(savedData) : null;
+    // 保存当前状态作为"已保存"状态
+    function saveCurrentStateAsSaved() {
+      savedSectionStructure = JSON.parse(JSON.stringify(sectionStructure));
+      savedStrategyData = JSON.parse(JSON.stringify(strategyData));
     }
     
     // 保存数据到本地存储
@@ -478,30 +501,54 @@
       }
     }
     
-    // 切换编辑模式
-    function toggleEditMode() {
-      editMode = !editMode;
+    // 进入编辑模式
+    function enterEditMode() {
+      editMode = true;
       
-      const toggleBtn = document.getElementById('toggleEditModeBtn');
-      const saveBtn = document.getElementById('saveChangesBtn');
-      
-      if (editMode) {
-        // 进入编辑模式
-        toggleBtn.innerHTML = '<i class="fa fa-times mr-1.5"></i>关闭编辑模式';
-        toggleBtn.classList.remove('bg-secondary', 'hover:bg-primary');
-        toggleBtn.classList.add('bg-danger', 'hover:bg-danger/90');
-        saveBtn.classList.remove('hidden');
-        showNotification('已进入编辑模式，可以直接修改内容和列');
-      } else {
-        // 退出编辑模式
-        toggleBtn.innerHTML = '<i class="fa fa-edit mr-1.5"></i>开启编辑模式';
-        toggleBtn.classList.remove('bg-danger', 'hover:bg-danger/90');
-        toggleBtn.classList.add('bg-secondary', 'hover:bg-primary');
-        saveBtn.classList.add('hidden');
-        showNotification('已退出编辑模式');
-      }
+      // 显示保存和取消按钮，隐藏编辑按钮
+      document.getElementById('editBtn').classList.add('hidden');
+      document.getElementById('saveBtn').classList.remove('hidden');
+      document.getElementById('cancelBtn').classList.remove('hidden');
       
       renderStrategyTable();
+      showNotification('已进入编辑模式，可以修改内容和列设置');
+    }
+    
+    // 保存修改
+    function saveChanges() {
+      if (saveToLocalStorage()) {
+        // 保存当前状态作为新的"已保存"状态
+        saveCurrentStateAsSaved();
+        
+        editMode = false;
+        
+        // 恢复按钮状态
+        document.getElementById('editBtn').classList.remove('hidden');
+        document.getElementById('saveBtn').classList.add('hidden');
+        document.getElementById('cancelBtn').classList.add('hidden');
+        
+        renderStrategyTable();
+        showNotification('所有修改已成功保存');
+      } else {
+        showNotification('保存失败，请重试', false);
+      }
+    }
+    
+    // 取消修改，恢复到上一次保存的状态
+    function cancelChanges() {
+      // 恢复到上一次保存的状态
+      sectionStructure = JSON.parse(JSON.stringify(savedSectionStructure));
+      strategyData = JSON.parse(JSON.stringify(savedStrategyData));
+      
+      editMode = false;
+      
+      // 恢复按钮状态
+      document.getElementById('editBtn').classList.remove('hidden');
+      document.getElementById('saveBtn').classList.add('hidden');
+      document.getElementById('cancelBtn').classList.add('hidden');
+      
+      renderStrategyTable();
+      showNotification('已取消修改，恢复到上一次保存的状态');
     }
     
     // 更新板块名称
@@ -512,7 +559,6 @@
         if (!sectionStructure[sectionIndex].dataField) {
           sectionStructure[sectionIndex].dataField = newName.trim().toLowerCase().replace(/\s+/g, '_');
         }
-        showNotification(`已更新板块名称: ${newName.trim()}`);
       } else {
         showNotification('板块名称不能为空', false);
         renderStrategyTable(); // 恢复原始值
@@ -536,8 +582,6 @@
             }
           });
         });
-        
-        showNotification(`已更新信息项名称: ${newName.trim()}`);
       } else {
         showNotification('信息项名称不能为空', false);
         renderStrategyTable(); // 恢复原始值
@@ -563,7 +607,6 @@
       });
       
       renderStrategyTable();
-      showNotification(`已向"${section.name}"添加新信息项`);
     }
     
     // 从板块删除信息项
@@ -585,7 +628,6 @@
       });
       
       renderStrategyTable();
-      showNotification(`已从"${section.name}"删除信息项`);
     }
     
     // 添加新板块
@@ -615,7 +657,6 @@
       });
       
       renderStrategyTable();
-      showNotification(`已添加新板块: ${newSectionName}`);
     }
     
     // 删除板块
@@ -641,16 +682,6 @@
         sectionStructure.splice(sectionIndex, 1);
         
         renderStrategyTable();
-        showNotification(`已删除板块: ${section.name}`);
-      }
-    }
-    
-    // 保存所有修改
-    function saveAllChanges() {
-      if (saveToLocalStorage()) {
-        showNotification('所有修改已成功保存');
-      } else {
-        showNotification('保存失败，请重试', false);
       }
     }
     
@@ -664,12 +695,16 @@
     
     // 页面加载时初始化
     window.addEventListener('load', () => {
+      // 初始化数据
+      initializeData();
+      
       // 渲染表格
       renderStrategyTable();
       
       // 添加按钮事件监听
-      document.getElementById('toggleEditModeBtn').addEventListener('click', toggleEditMode);
-      document.getElementById('saveChangesBtn').addEventListener('click', saveAllChanges);
+      document.getElementById('editBtn').addEventListener('click', enterEditMode);
+      document.getElementById('saveBtn').addEventListener('click', saveChanges);
+      document.getElementById('cancelBtn').addEventListener('click', cancelChanges);
       
       // 添加表格加载动画
       const table = document.querySelector('table');
